@@ -24,6 +24,8 @@ class CorexTest(unittest.TestCase):
                            [1, 0],
                            [0, 1],
                            [0, 0]], dtype=int)
+        print(self.layer1.labels)
+        print(labels)
         self.assertTrue(np.all(self.layer1.labels == labels))
 
 
