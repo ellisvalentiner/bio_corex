@@ -12,7 +12,7 @@ class CorexTest(unittest.TestCase):
                       [0, 0, 0, 1, 1],
                       [1, 1, 1, 0, 0],
                       [1, 1, 1, 1, 1]], dtype=int)
-        self.layer1 = ce.Corex(n_hidden=2, marginal_description='discrete', smooth_marginals=False)
+        self.layer1 = ce.Corex(n_hidden=2, marginal_description='discrete', smooth_marginals=False, seed=1)
         self.layer1.fit(X)
 
     def test_clusters(self):
