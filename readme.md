@@ -1,4 +1,4 @@
-#Bio CorEx: recover latent factors with Correlation Explanation (CorEx)
+# Bio CorEx: recover latent factors with Correlation Explanation (CorEx)
 
 The principle of Total *Cor*-relation *Ex*-planation has recently been introduced as a way to reconstruct latent factors
 that are informative about relationships in data. This project consists of python code to build these representations.
@@ -22,7 +22,7 @@ and [*here.*](https://www.researchgate.net/profile/Madelaine_Daianu2/publication
 For sparse binary data, try [*CorEx topic*](http://github.com/gregversteeg/corex_topic/). We are also working
 on a linear version of CorEx that is dramatically faster. Contact me if you'd like to try that out. 
 
-###Dependencies
+### Dependencies
 
 CorEx only requires numpy and scipy. If you use OS X, I recommend installing the [Scipy Superpack](http://fonnesbeck.github.io/ScipySuperpack/).
 
@@ -34,7 +34,7 @@ The visualization capabilities in vis_corex.py require other packages:
 * [graphviz](http://www.graphviz.org) (Optional, for compiling produced .dot files into pretty graphs. The command line 
 tools are called from vis_corex. Graphviz should be compiled with the triangulation library *gts* for best visual results).
 
-###Install
+### Install
 
 To install, download using [this link](https://github.com/gregversteeg/bio_corex/archive/master.zip) 
 or clone the project by executing this command in your target directory:
@@ -88,8 +88,8 @@ the point color corresponds to p(yj|x) for that point.
 
 ### Example
 
-The API design is based on the scikit-learn package. You define a model (model=Corex(with options here)) then use
- the model.fit(data) method to fit it on data, then you can transform new data with model.transform(new_data). 
+The API design is based on the scikit-learn package. You define a model (`model=Corex(with options here)`) then use
+ the `model.fit(data)` method to fit it on data, then you can transform new data with `model.transform(new_data)`. 
  The model has many other methods to access mutual information, measures of TC, and more. 
 ```python
 import corex as ce
@@ -117,16 +117,17 @@ layer1.tcs  # TC(X;Y_j) (all info measures reported in nats).
 # For this example, TC(X1,X2,X3)=1.386, TC(X4,X5) = 0.693
 ```
 
-
 ### Data format
 
-You can specify the type of the variables by passing the option "marginal_description='discrete'" for discrete variables or
-"marginal_description='gaussian'" for continuous variables. 
+You can specify the type of the variables by passing the option `marginal_description='discrete'` for discrete variables or
+`marginal_description='gaussian'` for continuous variables.
+ 
 For the discrete version of CorEx, you must input a matrix of integers whose rows represent samples and whose columns
 represent different variables. The values must be integers {0,1,...,k-1} where k represents the maximum number of 
 values that each variable, x_i can take. By default, entries equal to -1 are treated as missing. This can be 
-altered by passing a *missing_values* argument when initializing CorEx. 
-"smooth_marginals" tells whether to use Bayesian shrinkage estimators for marginal distributions to reduce noise.
+altered by passing a `missing_values` argument when initializing CorEx.
+
+`smooth_marginals` tells whether to use Bayesian shrinkage estimators for marginal distributions to reduce noise.
 It is turned on by default but is off in the example above (since it only has 4 samples, the smoothing will mess it up).
 
 ### CorEx outputs
@@ -137,8 +138,11 @@ Probabilistic labels can be accessed with *p_y_given_x*.
 
 The total correlation explained by each hidden factor, TC(X;Y_j), is accessed with *tcs*. Outputs are sorted
 so that Y_0 is always the component that explains the highest TC. 
-Like point-wise mutual information, you can define point-wise total correlation measure for an individual sample, x^l     
-TC(X = x^l;Y_j) == log Z_j(x)   
+
+Like point-wise mutual information, you can define point-wise total correlation measure for an individual sample, _x^l_     
+
+_TC(X = x^l;Y_j) == log Z_j(x)_   
+
 This quantity is accessed with *log_z*. This represents the correlations explained by Y_j for an individual sample.
 A low (or even negative!) number can be obtained. This can be interpreted as a measure of how surprising an individual
 observation is. This can be useful for anomaly detection. 
@@ -149,11 +153,9 @@ See the main section of vis_corex.py for more ideas of how to do visualization.
 
 ### Computational complexity
 
-This version has time and memory requirements like O(num. samples * num. variables * num. hidden units). By implementing
- mini-batch updates, we could eliminate the dependence on the number of samples. Sorry I haven't gotten to this yet. I
- have been able to run examples with thousands of variables, thousands of samples, and 100 latent factors on my laptop.
- It might also be important to check that your numpy implementation is linked to a good linear algebra library like 
- lapack or BLAS. 
+This version has time and memory requirements like O(num. samples * num. variables * num. hidden units). By implementing mini-batch updates, we could eliminate the dependence on the number of samples. Sorry I haven't gotten to this yet. I have been able to run examples with thousands of variables, thousands of samples, and 100 latent factors on my laptop.
+
+It might also be important to check that your numpy implementation is linked to a good linear algebra library like lapack or BLAS. 
 
 ### Hierarchical CorEx
 The simplest extension is to stack CorEx representations on top of each other. 
@@ -182,8 +184,6 @@ of samples is small (less than 200) or the number of variables or dim_hidden are
 
 Also note that CorEx can find different local optima after different random restarts. You can run it k times and take
 the best solution with the "repeat" option. 
-
-
 
 ### Troubleshooting visualization
 To get the visualization of the hierarchy looking nice sometimes takes a little effort. To get graphs to compile correctly do the following. 
