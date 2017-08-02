@@ -28,6 +28,7 @@ def unwrap_f(arg):
     """Multiprocessing pool.map requires a top-level function."""
     return Corex.calculate_p_xi_given_y(*arg)
 
+
 def logsumexp2(z):
     """Multiprocessing pool.map requires a top-level function."""
     return logsumexp(z, axis=2)
@@ -110,9 +111,10 @@ class Corex(object):
             therapeutic implications in cancer. BMC Medical Genomics, 2017.
 
     """
-    def __init__(self, n_hidden=2, dim_hidden=2,            # Size of representations
-                 max_iter=100, n_repeat=1, ram=8., max_samples=10000, n_cpu=1,   # Computational limits
-                 eps=1e-5, marginal_description='gaussian', smooth_marginals=False,    # Parameters
+
+    def __init__(self, n_hidden=2, dim_hidden=2,  # Size of representations
+                 max_iter=100, n_repeat=1, ram=8., max_samples=10000, n_cpu=1,  # Computational limits
+                 eps=1e-5, marginal_description='gaussian', smooth_marginals=False,  # Parameters
                  missing_values=-1, seed=None, verbose=False):
 
         self.dim_hidden = dim_hidden  # Each hidden factor can take dim_hidden discrete values
@@ -144,6 +146,20 @@ class Corex(object):
         self.marginal_description = marginal_description
         if verbose:
             print("Marginal description: ", marginal_description)
+
+        self.log_p_y = None
+        self.p_y_given_x = None
+        self.log_z = None
+        self.__dict__ = None
+        self.n_samples = None
+        self.n_visible = None
+        self.dim_hidden = None
+        self.alpha = None
+        self.tc_history = None
+        self.theta = None
+        self.dim_visible = None
+        self.tcs = None
+        self.mis = None
 
     def label(self, p_y_given_x):
         """Maximum likelihood labels for some distribution over y's"""
@@ -216,7 +232,8 @@ class Corex(object):
                 print('Overall tc:', self.tc)
             if self.tc > best_tc:
                 best_tc = self.tc
-                best_dict = self.__dict__.copy()  # TODO: what happens if n_cpu > 1 and n_repeat > 1? Does pool get copied? Probably not...just a pointer to the same object... Seems fine.
+                best_dict = self.__dict__.copy()  # TODO: what happens if n_cpu > 1 and n_repeat > 1? Does pool get
+                # copied? Probably not...just a pointer to the same object... Seems fine.
         self.__dict__ = best_dict
         if self.verbose:
             print('Best tc:', self.tc)
@@ -242,7 +259,7 @@ class Corex(object):
             n_samples = Xm.shape[0]
             surprise = []
             for l in range(n_samples):
-                q = - sum([max([log_marg_x[j,l,i,labels[l, j]]
+                q = - sum([max([log_marg_x[j, l, i, labels[l, j]]
                                 for j in range(self.n_hidden)])
                            for i in range(self.n_visible)])
                 surprise.append(q)
@@ -263,7 +280,7 @@ class Corex(object):
         """
         self.n_samples, self.n_visible = X.shape[:2]
         if self.marginal_description == 'discrete':
-            values_in_data = set(np.unique(X).tolist())-set([self.missing_values])
+            values_in_data = set(np.unique(X).tolist()) - {self.missing_values}
             self.dim_visible = int(max(values_in_data)) + 1
             if not set(range(self.dim_visible)) == values_in_data:
                 print("Warning: Data matrix values should be consecutive integers starting with 0,1,...")
@@ -294,17 +311,17 @@ class Corex(object):
 
         alpha = np.empty((self.n_hidden, self.n_visible))
         n_samples, n_visible = Xm.shape
-        memory_size = float(self.max_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000**3  # GB
+        memory_size = float(self.max_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000 ** 3  # GB
         batch_size = np.clip(int(self.ram * n_visible / memory_size), 1, n_visible)
         for i in range(0, n_visible, batch_size):
-            log_marg_x = self.calculate_marginals_on_samples(theta[i:i+batch_size], Xm[sample, i:i+batch_size])
+            log_marg_x = self.calculate_marginals_on_samples(theta[i:i + batch_size], Xm[sample, i:i + batch_size])
             correct_predictions = np.argmax(p_y_given_x, axis=2)[:, :, np.newaxis] == np.argmax(log_marg_x, axis=3)
             for ip in range(i, min(i + batch_size, n_visible)):
                 alpha[:, ip] = self.unique_info(correct_predictions[:, not_missing[:, ip], ip - i].T)
 
         for j in np.where(np.abs(tcs) < self.tc_min)[0]:  # Priming for un-used hidden units
             amax = np.clip(np.max(alpha[j, :]), 0.01, 0.99)
-            alpha[j, :] = alpha[j, :]**(np.log(0.99)/np.log(amax)) + 0.001 * np.random.random(self.n_visible)
+            alpha[j, :] = alpha[j, :] ** (np.log(0.99) / np.log(amax)) + 0.001 * np.random.random(self.n_visible)
         self.alpha = alpha[:, :, np.newaxis]  # TODO: This is the "correct" update but it is quite noisy. Add smoothing?
 
     def unique_info(self, correct):
@@ -329,11 +346,13 @@ class Corex(object):
         """"Calculate the probability distribution for hidden factors for each sample."""
         n_samples, n_visible = Xm.shape
         log_p_y_given_x_unnorm = np.empty((self.n_hidden, n_samples, self.dim_hidden))
-        memory_size = float(n_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000**3  # GB
+        memory_size = float(n_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000 ** 3  # GB
         batch_size = np.clip(int(self.ram * n_samples / memory_size), 1, n_samples)
         for l in range(0, n_samples, batch_size):
-            log_marg_x = self.calculate_marginals_on_samples(theta, Xm[l:l+batch_size])  # LLRs for each sample, for each var.
-            log_p_y_given_x_unnorm[:, l:l+batch_size, :] = self.log_p_y + np.einsum('ikl,ijkl->ijl', self.alpha, log_marg_x)
+            log_marg_x = self.calculate_marginals_on_samples(
+                theta, Xm[l:l + batch_size])  # LLRs for each sample, var.
+            log_p_y_given_x_unnorm[:, l:l + batch_size, :] = \
+                self.log_p_y + np.einsum('ikl,ijkl->ijl', self.alpha, log_marg_x)
         return self.normalize_latent(log_p_y_given_x_unnorm)
 
     def normalize_latent(self, log_p_y_given_x_unnorm):
@@ -377,7 +396,7 @@ class Corex(object):
         returns log p(y_j|x_i)/p(y_j) for each j,sample,i,y_j. [n_hidden, n_samples, n_visible, dim_hidden]
         """
         n_samples, n_visible = Xm.shape
-        log_marg_x = np.zeros((self.n_hidden, n_samples, n_visible, self.dim_hidden))  #, dtype=np.float32)
+        log_marg_x = np.zeros((self.n_hidden, n_samples, n_visible, self.dim_hidden))  # , dtype=np.float32)
         if n_visible > 1 and self.pool is not None:
             args = zip([self] * len(theta), Xm.T, theta)
             log_marg_x = np.array(self.pool.map(unwrap_f, args)).transpose((1, 2, 0, 3))
@@ -385,8 +404,10 @@ class Corex(object):
             for i in range(n_visible):
                 log_marg_x[:, :, i, :] = self.calculate_p_xi_given_y(Xm[:, i], theta[i])
         if return_ratio:  # Return log p(xi|y)/p(xi) instead of log p(xi|y)
-            # Again, I use the same p(y) here for each x_i, but for missing variables, p(y) on obs. sample may be different.
-            # log_marg_x -= logsumexp(log_marg_x + self.log_p_y.reshape((self.n_hidden, 1, 1, self.dim_hidden)), axis=3)[..., np.newaxis]
+            # Again, I use the same p(y) here for each x_i, but for missing variables, p(y) on obs. sample may be
+            # different.
+            # log_marg_x -= logsumexp(log_marg_x + self.log_p_y.reshape((self.n_hidden, 1, 1, self.dim_hidden)),
+            # axis=3)[..., np.newaxis]
             log_marg_x += self.log_p_y.reshape((self.n_hidden, 1, 1, self.dim_hidden))
             if self.pool is not None:
                 log_marg_x -= np.array(self.pool.map(logsumexp2, log_marg_x))[..., np.newaxis]
@@ -397,7 +418,7 @@ class Corex(object):
 
     def initialize_representation(self):
         if self.n_hidden > 1:
-            self.alpha = (0.5+0.5*np.random.random((self.n_hidden, self.n_visible, 1)))
+            self.alpha = (0.5 + 0.5 * np.random.random((self.n_hidden, self.n_visible, 1)))
         else:
             self.alpha = np.ones((self.n_hidden, self.n_visible, 1), dtype=float)
         self.tc_history = []
@@ -467,11 +488,15 @@ class Corex(object):
         n_observed = np.sum(np.logical_not(ma.getmaskarray(Xm[sample])), axis=0)
 
         n_samples, n_visible = Xm.shape
-        memory_size = float(n_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000**3  # GB
+        memory_size = float(n_samples * n_visible * self.n_hidden * self.dim_hidden * 64) / 1000 ** 3  # GB
         batch_size = np.clip(int(self.ram * n_visible / memory_size), 1, n_visible)
         for i in range(0, n_visible, batch_size):
-            log_marg_x = self.calculate_marginals_on_samples(theta[i:i+batch_size, ...], Xm[sample, i:i+batch_size])  # n_hidden, n_samples, n_visible, dim_hidden
-            mis[:, i:i+batch_size] = np.einsum('ijl,ijkl->ik', p_y_given_x[:, sample, :], log_marg_x) / n_observed[i:i+batch_size][np.newaxis, :]
+            log_marg_x = self.calculate_marginals_on_samples(
+                theta[i:i + batch_size, ...],
+                Xm[sample, i:i + batch_size])  # n_hidden, n_samples, n_visible, dim_hidden
+            mis[:, i:i + batch_size] = \
+                np.einsum('ijl,ijkl->ik',
+                          p_y_given_x[:, sample, :], log_marg_x) / n_observed[i:i + batch_size][np.newaxis, :]
         return mis  # MI in nats
 
     def mi_bootstrap(self, Xm, n_permutation=20):
@@ -494,7 +519,7 @@ class Corex(object):
         if self.marginal_description == 'gaussian':
             mu, sig = thetai  # mu, sig have size m by k
             xi = xi.reshape((-1, 1, 1))
-            return (-(xi - mu)**2 / (2. * sig) - 0.5 * np.log(2 * np.pi * sig)).transpose((1, 0, 2))  # log p(xi|yj)
+            return (-(xi - mu) ** 2 / (2. * sig) - 0.5 * np.log(2 * np.pi * sig)).transpose((1, 0, 2))  # log p(xi|yj)
 
         elif self.marginal_description == 'discrete':
             # Discrete data: should be non-negative integers starting at 0: 0,...k. k < 32 because of np.choose limits
@@ -507,20 +532,21 @@ class Corex(object):
 
     def estimate_parameters(self, xi, p_y_given_x):
         if self.marginal_description == 'gaussian':
-            n_obs = np.sum(p_y_given_x, axis=1).clip(0.1)  # m, k
+            n_obs = np.sum(p_y_given_x, axis=1).clip(0.1, None)  # m, k
             mean_ml = np.einsum('i,jik->jk', xi, p_y_given_x) / n_obs  # ML estimate of mean of Xi
-            sig_ml = np.einsum('jik,jik->jk', (xi[np.newaxis, :, np.newaxis] - mean_ml[:, np.newaxis, :])**2, p_y_given_x) / (n_obs - 1).clip(0.01)  # UB estimate of sigma^2(variance)
+            sig_ml = np.einsum('jik,jik->jk', (xi[np.newaxis, :, np.newaxis] - mean_ml[:, np.newaxis, :]) ** 2,
+                               p_y_given_x) / (n_obs - 1).clip(0.01)  # UB estimate of sigma^2(variance)
 
             if not self.smooth_marginals:
                 return np.array([mean_ml, sig_ml])  # FOR EACH Y_j = k !!
             else:  # mu = lam mu_ml + 1-lam mu0 for lam minimizing KL divergence risk
                 mean0 = np.mean(xi)
-                sig0 = np.sum((xi - mean0)**2) / (len(xi) - 1)
+                sig0 = np.sum((xi - mean0) ** 2) / (len(xi) - 1)
                 m1, m2, se1, se2 = self.estimate_se(xi, p_y_given_x, n_obs)
                 d1 = mean_ml - m1
                 d2 = sig_ml - m2
-                lam = d1**2 / (d1**2 + se1**2)
-                gam = d2**2 / (d2**2 + se2**2)
+                lam = d1 ** 2 / (d1 ** 2 + se1 ** 2)
+                gam = d2 ** 2 / (d2 ** 2 + se2 ** 2)
                 lam, gam = np.where(np.isfinite(lam), lam, 0.5), np.where(np.isfinite(gam), gam, 0.5)
                 # lam2 = 1. - 1. / (1. + n_obs)  # Constant pseudo-count, doesn't work as well.
                 # gam2 = 1. - 1. / (1. + n_obs)
@@ -540,7 +566,7 @@ class Corex(object):
                 G_stat = 2 * np.sum(np.where(counts > 0, counts * (np.log(counts) - np.log(n_obs * prior)), 0), axis=0)
                 G0 = self.estimate_sig(x_select, p_y_given_x, n_obs, prior)
                 z = 1
-                lam = G_stat**z / (G_stat**z + G0**z)
+                lam = G_stat ** z / (G_stat ** z + G0 ** z)
                 lam = np.where(np.isnan(lam), 0.5, lam)
                 p = (1 - lam) * prior + lam * p
             return np.log(p)
@@ -552,14 +578,16 @@ class Corex(object):
     def estimate_se(self, xi, p_y_given_x, n_obs):
         # Get a bootstrap estimate of mean and standard error for estimating mu and sig^2 given | Y_j=k  (under null)
         # x_copy = np.hstack([np.random.choice(xi, size=(len(xi), 1), replace=False) for _ in range(20)])
-        x_copy = np.random.choice(xi, size=(len(xi), 20), replace=True)  # w/o replacement leads to...higher s.e. and more smoothing.
+        x_copy = np.random.choice(xi, size=(len(xi), 20),
+                                  replace=True)  # w/o replacement leads to...higher s.e. and more smoothing.
         m, n, k = p_y_given_x.shape
         mean_ml = np.einsum('il,jik->jkl', x_copy, p_y_given_x) / n_obs[..., np.newaxis]  # ML estimate
-        sig_ml = np.einsum('jikl,jik->jkl', (x_copy.reshape((1, n, 1, 20)) - mean_ml.reshape((m, 1, k, 20)))**2, p_y_given_x) / (n_obs[..., np.newaxis] - 1).clip(0.01) # ML estimate
+        sig_ml = np.einsum('jikl,jik->jkl', (x_copy.reshape((1, n, 1, 20)) - mean_ml.reshape((m, 1, k, 20))) ** 2,
+                           p_y_given_x) / (n_obs[..., np.newaxis] - 1).clip(0.01)  # ML estimate
         m1 = np.mean(mean_ml, axis=2)
         m2 = np.mean(sig_ml, axis=2)
-        se1 = np.sqrt(np.sum((mean_ml - m1[..., np.newaxis])**2, axis=2) / 19.)
-        se2 = np.sqrt(np.sum((sig_ml - m2[..., np.newaxis])**2, axis=2) / 19.)
+        se1 = np.sqrt(np.sum((mean_ml - m1[..., np.newaxis]) ** 2, axis=2) / 19.)
+        se2 = np.sqrt(np.sum((sig_ml - m2[..., np.newaxis]) ** 2, axis=2) / 19.)
         return m1, m2, se1, se2
 
     def estimate_sig(self, x_select, p_y_given_x, n_obs, prior):
@@ -571,4 +599,3 @@ class Corex(object):
             counts = np.dot(x_select, p_y_given_x[:, order, :])  # dim_v, m, k
             Gs.append(2 * np.sum(np.where(counts > 0, counts * (np.log(counts) - np.log(n_obs * prior)), 0), axis=0))
         return np.mean(Gs, axis=0)
-
