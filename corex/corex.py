@@ -150,7 +150,7 @@ class Corex(object):
         self.log_p_y = None
         self.p_y_given_x = None
         self.log_z = None
-        self.__dict__ = None
+        self.__dict__ = dict()
         self.n_samples = None
         self.n_visible = None
         self.dim_hidden = None
