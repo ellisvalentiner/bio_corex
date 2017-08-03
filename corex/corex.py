@@ -147,20 +147,6 @@ class Corex(object):
         if verbose:
             print("Marginal description: ", marginal_description)
 
-        self.log_p_y = None
-        self.p_y_given_x = None
-        self.log_z = None
-        self.__dict__ = dict()
-        self.n_samples = None
-        self.n_visible = None
-        self.dim_hidden = None
-        self.alpha = None
-        self.tc_history = None
-        self.theta = None
-        self.dim_visible = None
-        self.tcs = None
-        self.mis = None
-
     def label(self, p_y_given_x):
         """Maximum likelihood labels for some distribution over y's"""
         return np.argmax(p_y_given_x, axis=2).T
