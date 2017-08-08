@@ -40,7 +40,7 @@ def vis_rep(corex, data=None, row_label=None, column_label=None, prefix='corex_o
     plot_convergence(corex.tc_history, prefix=prefix)
 
 
-def vis_hierarchy(corexes, row_label=None, column_label=None, max_edges=100, prefix=''):
+def vis_hierarchy(corexes, row_label=None, column_label=None, max_edges=100, prefix='corex_output'):
     """Visualize a hierarchy of representations."""
     if column_label is None:
         column_label = map(str, range(corexes[0].alpha.shape[1]))
